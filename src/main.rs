@@ -4,7 +4,7 @@
 extern crate clap;
 extern crate serial;
 
-use std::io::{self, Write};
+use std::io::{self, Read, Write};
 use std::process;
 use std::time::Duration;
 
@@ -100,6 +100,7 @@ fn run_subcommand(matches: ArgMatches) -> Result<(), io::Error> {
 
     let mut rpc_client = client::RpcClient::new();
     let mut send_buf = vec![0; 32];
+    let mut recv_buf = vec![0; 32];
 
     match matches.subcommand() {
         ("ping", Some(m)) => {
@@ -108,7 +109,23 @@ fn run_subcommand(matches: ArgMatches) -> Result<(), io::Error> {
             &payload.copy_from_slice(arg[..4].as_bytes());
             let mut req = client::RequestType::<RequestPing>::new(payload);
             let n = req.request(None, &mut rpc_client, &mut send_buf).unwrap();
-            port_raw.write_all(&send_buf[..n]);
+            port_raw.write_all(&send_buf[..n])?;
+
+            let mut pos = 0;
+            let mut read_len = consts::REP_HEADER_LEN;
+            loop {
+                let mut buf = &mut recv_buf[pos..pos + read_len];
+                port_raw.read_exact(&mut buf)?;
+                pos += read_len;
+                read_len = rpc_client.parse(&buf).unwrap().0;
+                match req.reply(&mut rpc_client) {
+                    Some(r) => {
+                        println!("reply: {:?}", r.unwrap());
+                        break;
+                    }
+                    None => {}
+                }
+            }
         }
         ("send_bytes", Some(m)) => {}
         ("add", Some(m)) => {
@@ -116,7 +133,23 @@ fn run_subcommand(matches: ArgMatches) -> Result<(), io::Error> {
             let arg2 = m.value_of("arg2").unwrap().parse::<u8>().unwrap();
             let mut req = client::RequestType::<RequestAdd>::new((arg1, arg2));
             let n = req.request(None, &mut rpc_client, &mut send_buf).unwrap();
-            port_raw.write_all(&send_buf[..n]);
+            port_raw.write_all(&send_buf[..n])?;
+
+            let mut pos = 0;
+            let mut read_len = consts::REP_HEADER_LEN;
+            loop {
+                let mut buf = &mut recv_buf[pos..pos + read_len];
+                port_raw.read_exact(&mut buf)?;
+                pos += read_len;
+                read_len = rpc_client.parse(&buf).unwrap().0;
+                match req.reply(&mut rpc_client) {
+                    Some(r) => {
+                        println!("reply: {:?}", r.unwrap());
+                        break;
+                    }
+                    None => {}
+                }
+            }
         }
         _ => unreachable!(),
     }

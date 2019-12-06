@@ -121,7 +121,21 @@ fn run_subcommand(matches: ArgMatches) -> Result<(), io::Error> {
                 Ok(r) => println!("Reply: {:?}", r),
             }
         }
-        ("send_bytes", Some(m)) => {}
+        ("send_bytes", Some(m)) => {
+            let arg = m.value_of("arg").unwrap();
+
+            let mut req = RequestSendBytes::new(());
+            let n = req
+                .request(&arg.as_bytes(), &mut rpc_client, vec![0; 32], &mut send_buf)
+                .unwrap();
+            dbg!(&send_buf[..n]);
+            port_raw.write_all(&send_buf[..n])?;
+
+            match ReplyWaiter::new(req, rpc_client).block_rcv_reply(&mut port_raw, 32) {
+                Err(e) => println!("Err: {:?}", e),
+                Ok(r) => println!("Reply: {:?}", r),
+            }
+        }
         ("add", Some(m)) => {
             let arg1 = m.value_of("arg1").unwrap().parse::<u8>().unwrap();
             let arg2 = m.value_of("arg2").unwrap().parse::<u8>().unwrap();
